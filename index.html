@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Daycare Shopping List</title>
+
+  <!-- App-like (Add to Home Screen) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Daycare Shopping" />
+  <meta name="theme-color" content="#2b6cb0" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Firebase (shared sync across all phones) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #2b6cb0;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header span { font-size: 0.875rem; opacity: 0.85; }
+
+    nav {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px;
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    nav button {
+      padding: 8px 20px;
+      border: 2px solid #2b6cb0;
+      border-radius: 8px;
+      background: white;
+      color: #2b6cb0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    nav button.active, nav button:hover {
+      background: #2b6cb0;
+      color: white;
+    }
+
+    .page { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* EMPLOYEE PAGE */
+    .location-select {
+      margin-bottom: 24px;
+    }
+
+    .location-select label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #4a5568;
+    }
+
+    .location-select select {
+      padding: 10px 14px;
+      border: 2px solid #cbd5e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      background: white;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .category-block {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .category-block h3 {
+      background: #ebf4ff;
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #2b6cb0;
+      border-bottom: 1px solid #bee3f8;
+    }
+
+    .item-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid #f7fafc;
+      gap: 12px;
+    }
+
+    .item-row:last-child { border-bottom: none; }
+
+    .item-name {
+      flex: 1;
+      font-size: 0.95rem;
+    }
+
+    .item-row input[type="number"] {
+      width: 80px;
+      padding: 6px 10px;
+      border: 2px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      text-align: center;
+      transition: border-color 0.15s;
+    }
+
+    .item-row input[type="number"]:focus {
+      outline: none;
+      border-color: #2b6cb0;
+    }
+
+    .item-row input[type="number"]:not(:placeholder-shown):valid {
+      border-color: #48bb78;
+    }
+
+    .unit-label {
+      font-size: 0.8rem;
+      color: #a0aec0;
+      width: 48px;
+    }
+
+    .add-item-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      gap: 8px;
+      border-top: 1px dashed #cbd5e0;
+      background: #f7fafc;
+    }
+
+    .add-item-row input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      border: 2px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .add-item-row input[type="text"]:focus {
+      outline: none;
+      border-color: #2b6cb0;
+    }
+
+    .add-item-btn {
+      padding: 6px 14px;
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .add-item-btn:hover { background: #2c5282; }
+
+    .custom-item-row {
+      background: #fffbf0;
+    }
+
+    .remove-item-btn {
+      background: none;
+      border: none;
+      color: #fc8181;
+      font-size: 1.1rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+
+    .remove-item-btn:hover { color: #c53030; }
+
+    .save-btn {
+      display: block;
+      width: 100%;
+      max-width: 360px;
+      margin: 24px auto 0;
+      padding: 14px;
+      background: #38a169;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .save-btn:hover { background: #2f855a; }
+
+    .saved-banner {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #276749;
+      color: white;
+      border-radius: 24px;
+      padding: 10px 22px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.9rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      z-index: 100;
+    }
+
+    /* OWNER DASHBOARD */
+    .week-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .week-controls label { font-weight: 600; color: #4a5568; }
+
+    .week-controls input[type="date"] {
+      padding: 8px 12px;
+      border: 2px solid #cbd5e0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .clear-week-btn {
+      padding: 8px 16px;
+      background: #fed7d7;
+      color: #c53030;
+      border: 2px solid #feb2b2;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .clear-week-btn:hover { background: #fc8181; color: white; }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+      margin-bottom: 32px;
+      font-size: 0.9rem;
+    }
+
+    .summary-table th {
+      background: #2b6cb0;
+      color: white;
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    .summary-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table tr:hover td { background: #f7fafc; }
+
+    .summary-table .cat-header td {
+      background: #ebf4ff;
+      color: #2b6cb0;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 7px 14px;
+    }
+
+    .num { text-align: center; }
+    .total-col { font-weight: 700; background: #fefcbf; }
+    .zero { color: #cbd5e0; }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .dashboard-header h2 { font-size: 1.1rem; font-weight: 700; color: #2d3748; }
+
+    .print-btn {
+      padding: 8px 16px;
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .print-btn:hover { background: #2c5282; }
+
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #a0aec0;
+      font-size: 1rem;
+    }
+
+    #print-frame { display: none; }
+
+    @media print {
+      @page { size: landscape; margin: 12mm 14mm; }
+      body > *:not(#print-frame) { display: none !important; }
+      #print-frame {
+        display: block !important;
+        font-family: -apple-system, Arial, sans-serif;
+        font-size: 10pt;
+        color: #111;
+      }
+      .ph { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; border-bottom: 2px solid #1a4a7a; padding-bottom: 8px; }
+      .ph h1 { font-size: 16pt; font-weight: 800; color: #1a4a7a; }
+      .ph p { font-size: 9pt; color: #555; margin-top: 3px; }
+      .ph .wk { font-size: 10pt; font-weight: 600; color: #333; text-align: right; }
+      .pt { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+      .pt th { background: #1a4a7a !important; color: white !important; padding: 7px 8px; text-align: left; font-weight: 700; border: 1px solid #1a4a7a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pt th.num { text-align: center; }
+      .pt td { padding: 5px 8px; border: 1px solid #d1d5db; }
+      .pt td.num { text-align: center; }
+      .pt tr.ch td { background: #dbeafe !important; color: #1a4a7a !important; font-size: 8pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid #93c5fd; padding: 4px 8px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pt .tc { background: #fef9c3 !important; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pt .ev td { background: #f0f5ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .zero { color: #bbb; }
+    }
+
+    @media (max-width: 600px) {
+      .summary-table th, .summary-table td { padding: 8px 8px; font-size: 0.82rem; }
+      header h1 { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Daycare Shopping</h1>
+  <span id="current-week-label"></span>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('employee')">Employee Entry</button>
+  <button onclick="showPage('owner')">Owner Dashboard</button>
+</nav>
+
+<div class="page active" id="page-employee">
+  <div class="location-select">
+    <label>Your Location</label>
+    <select id="location-select">
+      <option value="">— Select your location —</option>
+      <option value="loc1">347 13th Street</option>
+      <option value="loc2">314 Greenwood Ave</option>
+      <option value="loc3">1699 11th Ave</option>
+    </select>
+  </div>
+
+  <div id="entry-form"></div>
+
+  <div class="saved-banner" id="saved-banner">✓ Saved automatically</div>
+</div>
+
+<div class="page" id="page-owner">
+  <div class="week-controls">
+    <label>Week of:</label>
+    <input type="date" id="week-picker" onchange="onWeekChange()" />
+    <button class="clear-week-btn" onclick="clearWeek()">Clear This Week</button>
+  </div>
+  <div class="print-title" style="display:none">
+    <h2>🛒 Daycare Shopping List</h2>
+    <p id="print-week-label"></p>
+  </div>
+  <div id="dashboard"></div>
+</div>
+
+<div id="print-frame"></div>
+
+<script>
+// ============================================================
+//  FIREBASE CONFIG  — paste the values from your Firebase project here.
+//  Until you do, the app works on a single device using local storage.
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAUbI6N_HujTmgZFWTRqd6IYxproUsefyE",
+  authDomain: "daycare-shopping.firebaseapp.com",
+  databaseURL: "https://daycare-shopping-default-rtdb.firebaseio.com",
+  projectId: "daycare-shopping",
+  storageBucket: "daycare-shopping.firebasestorage.app",
+  messagingSenderId: "692579911917",
+  appId: "1:692579911917:web:544293d7735f7dc2d524e4"
+};
+
+const LOCATIONS = {
+  loc1: "347 13th St",
+  loc2: "314 Greenwood",
+  loc3: "1699 11th Ave"
+};
+
+const ITEMS = [
+  { cat: "Produce", items: ["Potato", "Sweet Potato", "Garlic", "Onion", "Broccoli", "Pepper", "Cauliflower", "Celery", "Carrots", "Dill", "Green Bean", "Avocado"] },
+  { cat: "Fruits", items: ["Apple"] },
+  { cat: "Protein", items: ["Chicken Nuggets", "Meat", "Fish Fillet", "Eggs"] },
+  { cat: "Dairy", items: ["Milk", "Butter", "Yogurt", "Cheese"] },
+  { cat: "Grains & Dry", items: ["Rice", "Lentil", "Mac & Cheese", "Oatmeal", "Pancakes", "Cracker", "Bread", "Baking Powder"] },
+  { cat: "Veggies (Frozen/Other)", items: ["Veggie"] },
+  { cat: "Beverages & Other", items: ["Coffee", "Sauce", "Sugar"] },
+  { cat: "Supplies", items: ["Dish Soap", "Hand Soap", "Tissue", "Clorox", "Garbage Bags", "Floor Cleaner", "Gloves", "Diaper"] }
+];
+
+function getWeekKey(dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const day = d.getDay();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - ((day === 0 ? 7 : day) - 1));
+  return mon.toISOString().slice(0, 10);
+}
+
+function currentWeekKey() {
+  const picker = document.getElementById("week-picker");
+  return getWeekKey(picker ? picker.value : null);
+}
+
+// ============================================================
+//  DATA LAYER
+//  Uses Firebase when configured (shared across all phones),
+//  otherwise falls back to this device's local storage.
+// ============================================================
+let db = null;
+let USE_FIREBASE = false;
+const CACHE = {};          // weekKey -> { data: {...}, custom: { locKey: {...} } }
+let subscribedWeek = null;
+
+(function initFirebase() {
+  if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL) {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+      USE_FIREBASE = true;
+    } catch (e) {
+      console.error("Firebase init failed, using local storage:", e);
+      USE_FIREBASE = false;
+    }
+  }
+})();
+
+function storageKey(weekKey) { return "shopping_" + weekKey; }
+function customItemsKey(weekKey, locKey) { return "custom_" + weekKey + "_" + locKey; }
+
+// ---- Local storage fallback helpers ----
+function lsLoadData(weekKey) {
+  try { return JSON.parse(localStorage.getItem(storageKey(weekKey)) || "{}"); } catch(e) { return {}; }
+}
+function lsLoadCustom(weekKey, locKey) {
+  try { return JSON.parse(localStorage.getItem(customItemsKey(weekKey, locKey)) || "{}"); } catch(e) { return {}; }
+}
+
+// ---- Public read API (synchronous, from cache or local storage) ----
+function loadData(weekKey) {
+  if (USE_FIREBASE) return (CACHE[weekKey] && CACHE[weekKey].data) || {};
+  return lsLoadData(weekKey);
+}
+function loadCustomItems(weekKey, locKey) {
+  if (USE_FIREBASE) return (CACHE[weekKey] && CACHE[weekKey].custom && CACHE[weekKey].custom[locKey]) || {};
+  return lsLoadCustom(weekKey, locKey);
+}
+
+// ---- Public write API ----
+function saveData(weekKey, data) {
+  if (USE_FIREBASE) {
+    if (!CACHE[weekKey]) CACHE[weekKey] = {};
+    CACHE[weekKey].data = data;
+    db.ref("weeks/" + weekKey + "/data").set(data);
+  } else {
+    localStorage.setItem(storageKey(weekKey), JSON.stringify(data));
+  }
+}
+function saveCustomItems(weekKey, locKey, customs) {
+  if (USE_FIREBASE) {
+    if (!CACHE[weekKey]) CACHE[weekKey] = {};
+    if (!CACHE[weekKey].custom) CACHE[weekKey].custom = {};
+    CACHE[weekKey].custom[locKey] = customs;
+    db.ref("weeks/" + weekKey + "/custom/" + locKey).set(customs);
+  } else {
+    localStorage.setItem(customItemsKey(weekKey, locKey), JSON.stringify(customs));
+  }
+}
+
+// ---- Live subscription: keep current week in sync across devices ----
+function subscribeToWeek(weekKey) {
+  if (!USE_FIREBASE) return;
+  if (subscribedWeek === weekKey) return;
+  if (subscribedWeek) db.ref("weeks/" + subscribedWeek).off();
+  subscribedWeek = weekKey;
+
+  db.ref("weeks/" + weekKey).on("value", (snap) => {
+    const val = snap.val() || {};
+    CACHE[weekKey] = { data: val.data || {}, custom: val.custom || {} };
+    onRemoteUpdate(weekKey);
+  });
+}
+
+// Re-render when data changes on another device — without disrupting active typing
+function onRemoteUpdate(weekKey) {
+  if (weekKey !== currentWeekKey()) return;
+  const ownerActive = document.getElementById("page-owner").classList.contains("active");
+  if (ownerActive) {
+    renderDashboard();
+  } else {
+    const locKey = document.getElementById("location-select").value;
+    const editing = document.activeElement && document.activeElement.tagName === "INPUT";
+    if (locKey && !editing) buildForm(locKey);
+  }
+}
+
+function itemRow(item, key, val, isCustom) {
+  return `<div class="item-row${isCustom ? " custom-item-row" : ""}">
+    <span class="item-name">${item}</span>
+    <input type="number" min="0" placeholder="0" data-key="${key}" data-name="${item}" value="${val || ""}" oninput="autoSave()" />
+    <span class="unit-label">units</span>
+    ${isCustom ? `<button class="remove-item-btn" title="Remove" onclick="removeCustomItem(this,'${key}')">✕</button>` : ""}
+  </div>`;
+}
+
+function addItemRow(catKey) {
+  const locKey = document.getElementById("location-select").value;
+  if (!locKey) return;
+  const block = document.querySelector(`.category-block[data-cat="${catKey}"]`);
+  const input = block.querySelector(".add-item-row input[type='text']");
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+
+  const key = "custom__" + name.toLowerCase().replace(/\s+/g, "_") + "__" + Date.now();
+  const weekKey = currentWeekKey();
+  const customs = loadCustomItems(weekKey, locKey);
+  if (!customs[catKey]) customs[catKey] = [];
+  customs[catKey].push({ name, key });
+  saveCustomItems(weekKey, locKey, customs);
+
+  const addRow = block.querySelector(".add-item-row");
+  const row = document.createElement("div");
+  row.innerHTML = itemRow(name, key, "", true);
+  block.insertBefore(row.firstElementChild, addRow);
+  input.value = "";
+  input.focus();
+}
+
+function removeCustomItem(btn, key) {
+  const locKey = document.getElementById("location-select").value;
+  if (!locKey) return;
+  const weekKey = currentWeekKey();
+  const customs = loadCustomItems(weekKey, locKey);
+  for (const cat in customs) {
+    customs[cat] = customs[cat].filter(i => i.key !== key);
+  }
+  saveCustomItems(weekKey, locKey, customs);
+
+  // Also remove from saved data
+  const data = loadData(weekKey);
+  if (data[locKey]) { delete data[locKey][key]; saveData(weekKey, data); }
+
+  btn.closest(".item-row").remove();
+}
+
+// Build employee form
+function buildForm(locKey) {
+  const container = document.getElementById("entry-form");
+  if (!locKey) { container.innerHTML = ""; return; }
+
+  const weekKey = currentWeekKey();
+  const data = loadData(weekKey);
+  const locData = data[locKey] || {};
+  const customs = loadCustomItems(weekKey, locKey);
+
+  let html = "";
+  ITEMS.forEach(group => {
+    const catKey = group.cat.toLowerCase().replace(/\s+/g, "_");
+    html += `<div class="category-block" data-cat="${catKey}"><h3>${group.cat}</h3>`;
+
+    group.items.forEach(item => {
+      const key = item.toLowerCase().replace(/\s+/g, "_");
+      html += itemRow(item, key, locData[key] || "", false);
+    });
+
+    // Custom items for this category
+    (customs[catKey] || []).forEach(({ name, key }) => {
+      html += itemRow(name, key, locData[key] || "", true);
+    });
+
+    html += `<div class="add-item-row">
+      <input type="text" placeholder="Add item…" onkeydown="if(event.key==='Enter')addItemRow('${catKey}')" />
+      <button class="add-item-btn" onclick="addItemRow('${catKey}')">+ Add</button>
+    </div>`;
+    html += "</div>";
+  });
+  container.innerHTML = html;
+}
+
+document.getElementById("location-select").addEventListener("change", function() {
+  buildForm(this.value);
+});
+
+let saveTimer = null;
+function autoSave() {
+  const locKey = document.getElementById("location-select").value;
+  if (!locKey) return;
+
+  const weekKey = currentWeekKey();
+  const data = loadData(weekKey);
+  data[locKey] = {};
+
+  document.querySelectorAll("#entry-form input[data-key]").forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (v > 0) data[locKey][inp.dataset.key] = v;
+  });
+
+  saveData(weekKey, data);
+
+  // Debounced toast so it doesn't flash on every keystroke
+  const banner = document.getElementById("saved-banner");
+  banner.style.display = "block";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => banner.style.display = "none", 1500);
+}
+
+// Owner dashboard
+function renderDashboard() {
+  const weekKey = currentWeekKey();
+  const data = loadData(weekKey);
+  const locKeys = Object.keys(LOCATIONS);
+  const container = document.getElementById("dashboard");
+
+  // Build full item list: standard + custom items from all locations merged per category
+  const allItems = [];
+  ITEMS.forEach(g => {
+    const catKey = g.cat.toLowerCase().replace(/\s+/g, "_");
+    g.items.forEach(i => allItems.push({ cat: g.cat, catKey, name: i, key: i.toLowerCase().replace(/\s+/g, "_") }));
+
+    // Merge custom items from all locations for this category (dedupe by key)
+    const seen = new Set();
+    locKeys.forEach(lk => {
+      const customs = loadCustomItems(weekKey, lk);
+      (customs[catKey] || []).forEach(({ name, key }) => {
+        if (!seen.has(key)) { seen.add(key); allItems.push({ cat: g.cat, catKey, name, key }); }
+      });
+    });
+  });
+
+  const hasData = locKeys.some(lk => data[lk] && Object.keys(data[lk]).length > 0);
+
+  // Update print title
+  document.getElementById("print-week-label").textContent =
+    "Week of " + weekKey + "   |   " + locKeys.map(lk => LOCATIONS[lk]).join("   ·   ");
+
+  let html = `<div class="dashboard-header">
+    <h2>Week of ${weekKey}</h2>
+    <button class="print-btn" onclick="printDashboard()">Print / PDF</button>
+  </div>`;
+
+  if (!hasData) {
+    html += `<div class="no-data">No entries yet for this week.</div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  html += `<table class="summary-table">
+    <thead>
+      <tr>
+        <th>Item</th>
+        ${locKeys.map(lk => `<th class="num">${LOCATIONS[lk]}</th>`).join("")}
+        <th class="num total-col">Total</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  let lastCat = null;
+  allItems.forEach(({ cat, name, key }) => {
+    const vals = locKeys.map(lk => (data[lk] && data[lk][key]) ? data[lk][key] : 0);
+    const total = vals.reduce((a, b) => a + b, 0);
+
+    if (cat !== lastCat) {
+      html += `<tr class="cat-header"><td colspan="${locKeys.length + 2}">${cat}</td></tr>`;
+      lastCat = cat;
+    }
+
+    html += `<tr>
+      <td>${name}</td>
+      ${vals.map(v => `<td class="num ${v === 0 ? "zero" : ""}">${v || "—"}</td>`).join("")}
+      <td class="num total-col ${total === 0 ? "zero" : ""}">${total || "—"}</td>
+    </tr>`;
+  });
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+function clearWeek() {
+  if (!confirm("Clear all entries for this week?")) return;
+  const weekKey = currentWeekKey();
+  if (USE_FIREBASE) {
+    db.ref("weeks/" + weekKey).remove();
+    CACHE[weekKey] = { data: {}, custom: {} };
+  } else {
+    localStorage.removeItem(storageKey(weekKey));
+    Object.keys(LOCATIONS).forEach(lk => localStorage.removeItem(customItemsKey(weekKey, lk)));
+  }
+  renderDashboard();
+}
+
+function onWeekChange() {
+  subscribeToWeek(currentWeekKey());
+  renderDashboard();
+}
+
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  event.target.classList.add("active");
+  if (name === "owner") renderDashboard();
+}
+
+function printDashboard() {
+  const weekKey = currentWeekKey();
+  const data = loadData(weekKey);
+  const locKeys = Object.keys(LOCATIONS);
+
+  const allItems = [];
+  ITEMS.forEach(g => {
+    const catKey = g.cat.toLowerCase().replace(/\s+/g, "_");
+    g.items.forEach(i => allItems.push({ cat: g.cat, name: i, key: i.toLowerCase().replace(/\s+/g, "_") }));
+    const seen = new Set();
+    locKeys.forEach(lk => {
+      const customs = loadCustomItems(weekKey, lk);
+      (customs[catKey] || []).forEach(({ name, key }) => {
+        if (!seen.has(key)) { seen.add(key); allItems.push({ cat: g.cat, name, key }); }
+      });
+    });
+  });
+
+  let rows = "";
+  let lastCat = null;
+  let rowIndex = 0;
+  allItems.forEach(({ cat, name, key }) => {
+    const vals = locKeys.map(lk => (data[lk] && data[lk][key]) ? data[lk][key] : 0);
+    const total = vals.reduce((a, b) => a + b, 0);
+    if (cat !== lastCat) {
+      rows += `<tr class="ch"><td colspan="${locKeys.length + 2}">${cat}</td></tr>`;
+      lastCat = cat;
+      rowIndex = 0;
+    }
+    rows += `<tr class="${rowIndex++ % 2 === 1 ? "ev" : ""}">
+      <td>${name}</td>
+      ${vals.map(v => `<td class="num${v === 0 ? " zero" : ""}">${v || "—"}</td>`).join("")}
+      <td class="num tc">${total || "—"}</td>
+    </tr>`;
+  });
+
+  document.getElementById("print-frame").innerHTML = `
+    <div class="ph">
+      <div>
+        <h1>Daycare Shopping List</h1>
+        <p>${locKeys.map(lk => LOCATIONS[lk]).join("   ·   ")}</p>
+      </div>
+      <div class="wk">Week of ${weekKey}</div>
+    </div>
+    <table class="pt">
+      <thead><tr>
+        <th>Item</th>
+        ${locKeys.map(lk => `<th class="num">${LOCATIONS[lk]}</th>`).join("")}
+        <th class="num tc">Total</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  window.print();
+}
+
+// Init
+(function init() {
+  const mon = getWeekKey(null);
+  document.getElementById("week-picker").value = mon;
+  document.getElementById("current-week-label").textContent =
+    "Week of " + mon + (USE_FIREBASE ? "" : "  (this device only)");
+  subscribeToWeek(mon);
+})();
+</script>
+</body>
+</html>
